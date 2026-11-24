@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="tl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prism Live Lyrics Controller</title>
+<style>
+:root{--accent:#8b5cf6;--text:#fff}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0b1020;color:#eef2ff}
+button,input,textarea,select{font:inherit}button{border:0;border-radius:10px;padding:11px 15px;background:var(--accent);color:white;font-weight:700;cursor:pointer}
+button.secondary{background:#26324a}button.danger{background:#b4233b}
+.panel{max-width:850px;margin:24px auto;padding:20px;background:#141c2f;border:1px solid #293653;border-radius:18px}
+h1{margin:0 0 6px}.muted{color:#9aa9c5;font-size:13px}
+textarea,input,select{width:100%;padding:12px;border:1px solid #354461;border-radius:10px;background:#0b1324;color:white;margin:7px 0 14px}
+textarea{min-height:180px;resize:vertical}.row{display:flex;gap:9px;flex-wrap:wrap}.row>*{flex:1}
+.preview{margin-top:16px;min-height:145px;border-radius:14px;background:#050914;padding:25px;display:grid;place-items:center;text-align:center}
+#previewText{font-size:30px;font-weight:800;white-space:pre-wrap;overflow-wrap:anywhere}
+.status{margin-top:12px;color:#a5b4fc;font-size:13px}
+body.display{background:transparent}.display #controls{display:none}.display #displayStage{display:grid}
+#displayStage{display:none;position:fixed;inset:0;place-items:center;padding:4vw;background:transparent;text-align:center}
+#liveText{font-weight:800;color:white;font-size:clamp(28px,5vw,64px);line-height:1.25;white-space:pre-wrap;overflow-wrap:anywhere;text-shadow:0 3px 12px #000,0 1px 3px #000}
+#liveText.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="controls" class="panel">
+  <h1>🎤 Prism Live Lyrics</h1>
+  <div class="muted">Single HTML • Control panel + transparent lyrics display</div>
+  <label for="lyrics">Ilagay ang lyrics — bawat linya ay susunod na slide</label>
+  <textarea id="lyrics" placeholder="Unang linya ng kanta&#10;Ikalawang linya&#10;Ikatlong linya"></textarea>
+  <div class="row">
+    <div><label>Font size</label><input id="fontSize" type="number" min="18" max="100" value="48"></div>
+    <div><label>Text color</label><input id="fontColor" type="color" value="#ffffff"></div>
+    <div><label>Alignment</label><select id="alignment"><option value="center">Center</option><option value="left">Left</option><option value="right">Right</option></select></div>
+  </div>
+  <div class="row">
+    <button id="load">Load lyrics</button><button class="secondary" id="prev">◀ Previous</button><button class="secondary" id="next">Next ▶</button>
+  </div>
+  <div class="row" style="margin-top:9px">
+    <button id="show">Show lyrics</button><button class="danger" id="hide">Hide lyrics</button><button class="secondary" id="reset">Reset</button>
+  </div>
+  <div class="preview"><div id="previewText">Your lyrics will appear here</div></div>
+  <div class="status" id="status">Slide 0 / 0 • Waiting for lyrics</div>
+  <p class="muted">Prism Browser Source: buksan ang parehong HTML gamit ang <b>?display=1</b> sa dulo ng URL para transparent display mode. Panatilihing bukas ang control page sa parehong browser profile/origin.</p>
+</div>
+<div id="displayStage"><div id="liveText" class="hidden"></div></div>
+<script>
+(()=>{
+ const channel = ('BroadcastChannel' in window) ? new BroadcastChannel('prism-live-lyrics-v1') : null;
+ const $ = id => document.getElementById(id);
+ let lines=[], index=0, visible=false;
+ const isDisplay = new URLSearchParams(location.search).get('display')==='1';
+ if(isDisplay) document.body.classList.add('display');
+ function state(){return {lines,index,visible,size:Number($('fontSize')?.value||48),color:$('fontColor')?.value||'#ffffff',align:$('alignment')?.value||'center'}}
+ function paint(s=state()){
+   lines=s.lines||[]; index=Math.max(0,Math.min(s.index||0,Math.max(0,lines.length-1))); visible=!!s.visible;
+   const text=lines[index]||'';
+   if($('previewText')) $('previewText').textContent=text||'Your lyrics will appear here';
+   if($('status')) $('status').textContent=`Slide ${lines.length?index+1:0} / ${lines.length} • ${visible?'Visible':'Hidden'}`;
+   const live=$('liveText'); if(live){live.textContent=text;live.classList.toggle('hidden',!visible||!text);live.style.fontSize=`clamp(24px, ${Math.min(8,Math.max(2,s.size/10))}vw, ${s.size}px)`;live.style.color=s.color||'#fff';live.style.textAlign=s.align||'center'}
+ }
+ function send(){const s=state();paint(s);if(channel)channel.postMessage(s);try{localStorage.setItem('prism-live-lyrics-state',JSON.stringify(s))}catch(e){}}
+ if(channel) channel.onmessage=e=>paint(e.data);
+ window.addEventListener('storage',e=>{if(e.key==='prism-live-lyrics-state'&&e.newValue){try{paint(JSON.parse(e.newValue))}catch(_){}}});
+ if(isDisplay){try{const saved=localStorage.getItem('prism-live-lyrics-state');if(saved)paint(JSON.parse(saved))}catch(e){}}
+ else{
+  $('load').onclick=()=>{lines=$('lyrics').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);index=0;visible=true;send()};
+  $('prev').onclick=()=>{if(lines.length){index=Math.max(0,index-1);send()}};
+  $('next').onclick=()=>{if(lines.length){index=Math.min(lines.length-1,index+1);send()}};
+  $('show').onclick=()=>{visible=true;send()};
+  $('hide').onclick=()=>{visible=false;send()};
+  $('reset').onclick=()=>{index=0;visible=false;send()};
+  ['fontSize','fontColor','alignment'].forEach(id=>$(id).addEventListener('input',send));
+  paint();
+ }
+})();
+</script>
+</body>
+</html>
